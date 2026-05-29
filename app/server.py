@@ -50,7 +50,10 @@ def search(req: SearchRequest):
         raise HTTPException(status_code=400, detail="Empty query")
     top_k = max(10, min(int(req.top_k), 500))
     alpha = max(0.0, min(float(req.alpha), 1.0))
-    return engine.run_search(q, mode=req.mode, alpha=alpha, top_k=top_k)
+    try:
+        return engine.run_search(q, mode=req.mode, alpha=alpha, top_k=top_k)
+    except engine.DataNotReadyError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.post("/api/summary")

@@ -38,6 +38,18 @@ NEGATIVE_EMOTIONS = {"anger", "disgust", "fear", "pessimism", "sadness"}
 
 ICON_POLARITY = {"positive": "😊", "negative": "😠", "neutral": "😐"}
 
+class DataNotReadyError(RuntimeError):
+    """Raised when the notebook-generated data artefacts are missing."""
+
+    def __init__(self, missing):
+        self.missing = list(missing)
+        super().__init__(
+            "Required data files are missing: " + ", ".join(self.missing) +
+            ". These are produced by notebooks 01–06 and are not committed to git. "
+            "Run the notebooks (or copy the data/ folder from another machine) before starting the app."
+        )
+
+
 # ── Lazy global resources ────────────────────────────────────────────────────
 _RES = None
 _RES_LOCK = Lock()
@@ -59,6 +71,19 @@ def load_resources():
     with _RES_LOCK:
         if _RES is not None:
             return _RES
+
+        # The app needs artefacts produced by the notebooks (01–06). They are
+        # git-ignored, so a fresh clone won't have them — fail with a clear,
+        # actionable message instead of a raw FileNotFoundError deep in pandas.
+        required = {
+            "data/processed/tweets_processed.parquet": PROC_DIR / "tweets_processed.parquet",
+            "data/index/bm25.pkl":                      INDEX_DIR / "bm25.pkl",
+            "data/index/embeddings.npy":                INDEX_DIR / "embeddings.npy",
+            "data/index/faiss.index":                   INDEX_DIR / "faiss.index",
+        }
+        missing = [rel for rel, p in required.items() if not p.exists()]
+        if missing:
+            raise DataNotReadyError(missing)
 
         corpus = pd.read_parquet(PROC_DIR / "tweets_processed.parquet").reset_index(drop=True)
         with open(INDEX_DIR / "bm25.pkl", "rb") as f:

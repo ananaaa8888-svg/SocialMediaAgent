@@ -56,7 +56,27 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Εκκίνηση του Dashboard
+### 2. Δημιουργία των data artefacts (ΑΠΑΡΑΙΤΗΤΟ πριν το app)
+
+> ⚠️ Ο φάκελος `data/` **δεν** ανεβαίνει στο git (είναι στο `.gitignore`). Σε ένα
+> φρέσκο `git clone` τα αρχεία δεδομένων **δεν υπάρχουν**, οπότε το app θα
+> επιστρέψει σφάλμα *«Required data files are missing…»* μέχρι να τα παράξεις.
+
+Πριν τρέξεις το dashboard, εκτέλεσε **σειριακά** τα notebooks `01` → `06`
+(βλ. ενότητα [Εκτέλεση των Notebooks](#εκτέλεση-των-notebooks) παρακάτω). Το app
+χρειάζεται κατ’ ελάχιστον τα εξής, που παράγονται από αυτά:
+
+```
+data/processed/tweets_processed.parquet   (notebook 02)
+data/index/bm25.pkl                        (notebook 03)
+data/index/embeddings.npy                  (notebook 03)
+data/index/faiss.index                     (notebook 03)
+```
+
+> Εναλλακτικά, αν τα έχεις ήδη παράξει σε άλλο μηχάνημα, αντίγραψε ολόκληρο τον
+> φάκελο `data/` εκεί.
+
+### 3. Εκκίνηση του Dashboard
 
 ```bash
 uvicorn app.server:app --reload
@@ -68,7 +88,7 @@ python -m app.server
 (το `--reload` είναι προαιρετικό, για development). Το API documentation
 είναι διαθέσιμο στο **/api/docs**.
 
-### 3. Χρήση
+### 4. Χρήση
 
 1. Πληκτρολογήστε ένα query στο sidebar (π.χ. `vaccines`, `bitcoin`, `education`)
 2. Επιλέξτε retriever: **Hybrid** (προτεινόμενο), BM25, ή Semantic

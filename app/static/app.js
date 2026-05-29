@@ -112,7 +112,7 @@ async function runSearch() {
         top_k: +$('#topk').value,
       }),
     });
-    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    if (!res.ok) throw new Error(await errorMessage(res));
     const data = await res.json();
     STATE.data = data;
     renderAll(data);
@@ -395,7 +395,7 @@ $('#gen-abs').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ result_id: STATE.data.result_id }),
     });
-    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    if (!res.ok) throw new Error(await errorMessage(res));
     const { abstractive } = await res.json();
     ['positive', 'negative', 'neutral'].forEach(p => {
       const slot = $(`.report-section[data-pol="${p}"] .abs-slot`);
@@ -409,6 +409,12 @@ $('#gen-abs').addEventListener('click', async () => {
 });
 
 /* ── utils ──────────────────────────────────────────────────────────────── */
+async function errorMessage(res) {
+  // The server may return JSON ({detail}) or, on an unhandled 500, plain text.
+  const text = await res.text();
+  try { return JSON.parse(text).detail || text; }
+  catch { return text || `${res.status} ${res.statusText}`; }
+}
 function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
