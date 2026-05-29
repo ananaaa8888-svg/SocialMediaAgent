@@ -1,0 +1,39 @@
+# Core data
+pandas==2.2.3
+datasets==3.2.0
+pyarrow==18.1.0
+
+# NLP & ML
+nltk==3.9.1
+scikit-learn>=1.4.0
+rank-bm25>=0.2.2
+
+# Embeddings & Retrieval
+sentence-transformers==3.3.1
+faiss-cpu==1.9.0.post1
+
+# Deep Learning / Transformers
+transformers==4.47.1
+torch==2.5.1
+
+# Preprocessing
+tweet-preprocessor==0.6.0
+emoji==2.14.1
+
+# Clustering & Dimensionality Reduction
+hdbscan>=0.8.38
+umap-learn>=0.5.6
+
+# Web app (custom dashboard — FastAPI backend + hand-built static frontend)
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Visualization (notebooks)
+plotly>=5.24.0
+matplotlib>=3.9.0
+seaborn>=0.13.0
+
+# Notebook
+jupyter==1.1.1
+ipykernel==6.29.5
+ipywidgets>=8.1.0

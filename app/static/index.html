@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Media Monitoring Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>" />
+</head>
+<body>
+  <div class="app">
+    <!-- ─── Sidebar ─────────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">📡</div>
+        <div class="brand-text">
+          <h1>Social&nbsp;Media<br />Agent</h1>
+          <span>monitoring &amp; sentiment</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="query">Query</label>
+        <div class="input-wrap">
+          <svg viewBox="0 0 24 24" class="i-search"><path d="M21 21l-4.3-4.3M11 19a8 8 0 100-16 8 8 0 000 16z"/></svg>
+          <input id="query" type="text" value="education technology ai"
+                 placeholder="e.g. vaccines, bitcoin…" autocomplete="off" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Retriever</label>
+        <div class="segmented" id="mode">
+          <button data-mode="hybrid" class="active">Hybrid</button>
+          <button data-mode="bm25">BM25</button>
+          <button data-mode="semantic">Semantic</button>
+        </div>
+      </div>
+
+      <div class="field" id="alpha-field">
+        <label>Hybrid&nbsp;α <span class="muted">— BM25 weight</span><b id="alpha-val">0.50</b></label>
+        <input id="alpha" class="range" type="range" min="0" max="1" step="0.05" value="0.5" />
+      </div>
+
+      <div class="field">
+        <label>Top-K results <b id="topk-val">200</b></label>
+        <input id="topk" class="range" type="range" min="50" max="500" step="50" value="200" />
+      </div>
+
+      <button id="run" class="run-btn">
+        <span class="run-label">▶&nbsp;&nbsp;Run analysis</span>
+        <span class="spinner" hidden></span>
+      </button>
+
+      <div class="meta">
+        <div><span>Dataset</span><b>SemEval-2018 Task 1 E-c</b></div>
+        <div><span>Embedder</span><b>all-MiniLM-L6-v2</b></div>
+        <div><span>Summariser</span><b>distilbart-cnn-12-6</b></div>
+      </div>
+    </aside>
+
+    <!-- ─── Main ────────────────────────────────────────────────── -->
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-title">
+          <h2 id="result-title">Welcome</h2>
+          <p id="result-sub">Enter a query and press <b>Run analysis</b> to begin.</p>
+        </div>
+        <div class="topbar-stats" id="topbar-stats" hidden>
+          <div class="stat"><b id="stat-total">0</b><span>tweets</span></div>
+          <div class="stat pos"><b id="stat-pos">0</b><span>positive</span></div>
+          <div class="stat neg"><b id="stat-neg">0</b><span>negative</span></div>
+          <div class="stat neu"><b id="stat-neu">0</b><span>neutral</span></div>
+        </div>
+      </header>
+
+      <!-- Empty / loading states -->
+      <section id="empty" class="placeholder">
+        <div class="placeholder-art">📡</div>
+        <h3>No results yet</h3>
+        <p>The agent searches ~11k tweets, scores sentiment across 11 emotions,
+           clusters topics and writes summaries — all locally.</p>
+      </section>
+
+      <section id="loading" class="placeholder" hidden>
+        <div class="pulse"></div>
+        <h3 id="loading-text">Retrieving tweets…</h3>
+      </section>
+
+      <!-- Results -->
+      <section id="results" hidden>
+        <nav class="tabs" id="tabs">
+          <button data-tab="sentiment" class="active">Sentiment</button>
+          <button data-tab="tweets">Tweets</button>
+          <button data-tab="clusters">Topic Clusters</button>
+          <button data-tab="aspects">Aspect Analysis</button>
+          <button data-tab="report">Summary Report</button>
+        </nav>
+
+        <!-- TAB: Sentiment -->
+        <div class="panel active" data-panel="sentiment">
+          <div class="grid g-3">
+            <div class="card"><h4>Polarity split</h4><div id="chart-pie" class="chart"></div></div>
+            <div class="card"><h4>Tweet count</h4><div id="chart-pol-bar" class="chart"></div></div>
+            <div class="card span-2-wide"><h4>Emotion activation per polarity</h4><div id="chart-heat" class="chart"></div></div>
+          </div>
+          <div class="card">
+            <h4>Overall emotion activation rate</h4>
+            <div id="chart-emo" class="chart tall"></div>
+          </div>
+        </div>
+
+        <!-- TAB: Tweets -->
+        <div class="panel" data-panel="tweets">
+          <div class="filters">
+            <div class="filter-group" id="pol-filter">
+              <span class="filter-label">Polarity</span>
+              <button data-pol="positive" class="chip pos active">positive</button>
+              <button data-pol="negative" class="chip neg active">negative</button>
+              <button data-pol="neutral"  class="chip neu active">neutral</button>
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">Emotion</span>
+              <div class="emo-filter" id="emo-filter"></div>
+            </div>
+            <div class="filter-count" id="tweet-count"></div>
+          </div>
+          <div class="table-wrap">
+            <table class="tweet-table">
+              <thead>
+                <tr><th>#</th><th>Tweet</th><th>Polarity</th><th>Score</th><th>Emotions</th></tr>
+              </thead>
+              <tbody id="tweet-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB: Clusters -->
+        <div class="panel" data-panel="clusters">
+          <div class="grid g-side">
+            <div class="card">
+              <h4>Color by</h4>
+              <div class="segmented sm" id="color-by">
+                <button data-by="cluster" class="active">Cluster</button>
+                <button data-by="polarity">Polarity</button>
+              </div>
+              <h4 class="mt">Cluster top terms</h4>
+              <ul class="terms" id="cluster-terms"></ul>
+            </div>
+            <div class="card">
+              <h4>UMAP projection</h4>
+              <div id="chart-umap" class="chart xtall"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB: Aspects -->
+        <div class="panel" data-panel="aspects">
+          <div class="grid g-2">
+            <div class="card"><h4>Polarity counts per aspect</h4><div id="chart-asp-bar" class="chart"></div></div>
+            <div class="card"><h4>Emotion radar per aspect</h4><div id="chart-radar" class="chart"></div></div>
+          </div>
+          <div class="card"><h4>Emotion activation per aspect</h4><div id="chart-asp-heat" class="chart"></div></div>
+          <div class="card">
+            <h4>Representative tweet per aspect</h4>
+            <div id="aspect-reps" class="reps"></div>
+          </div>
+        </div>
+
+        <!-- TAB: Report -->
+        <div class="panel" data-panel="report">
+          <div class="report-head">
+            <h4 id="report-title">Summary report</h4>
+            <button id="gen-abs" class="run-btn inline">
+              <span class="run-label">🤖&nbsp;&nbsp;Generate abstractive summaries</span>
+              <span class="spinner" hidden></span>
+            </button>
+          </div>
+          <div id="report-body" class="report-body"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
