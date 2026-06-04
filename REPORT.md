@@ -4,23 +4,23 @@
 
 ## Περίληψη
 
-Η παρούσα εργασία παρουσιάζει τον σχεδιασμό και την υλοποίηση ενός end-to-end συστήματος παρακολούθησης κοινωνικών δικτύων, το οποίο συνδυάζει τεχνικές ανάκτησης πληροφορίας, πολυ-ετικέτα ταξινόμησης συναισθημάτων, μη επιβλεπόμενης ομαδοποίησης και αυτόματης σύνοψης κειμένου. Το σύστημα λαμβάνει ως είσοδο ένα ελεύθερο ερώτημα χρήστη και επιστρέφει τα πλέον σχετικά tweets από το σώμα κειμένου SemEval-2018 Task 1 E-c (10.896 tweets, 11 κατηγορίες συναισθήματος), μαζί με ανάλυση πολικότητας, οπτικοποίηση θεματικών ομάδων και αυτόματη δημιουργία συνόψεων. Αξιολογούνται συγκριτικά τρεις στρατηγικές ανάκτησης (BM25, σημασιολογική αναζήτηση, υβριδική) και τρία μοντέλα ταξινόμησης συναισθήματος (Logistic Regression, Linear SVM, Twitter-RoBERTa). Τα αποτελέσματα αναδεικνύουν την υπεροχή της υβριδικής ανάκτησης και του pre-trained Transformer για τα αντίστοιχα καθήκοντα. Το σύστημα προσφέρεται μέσω interactive web dashboard υλοποιημένο με FastAPI και vanilla JavaScript.
+Η παρούσα εργασία παρουσιάζει τον σχεδιασμό και την υλοποίηση ενός end-to-end συστήματος παρακολούθησης κοινωνικών δικτύων, το οποίο συνδυάζει τεχνικές information retrieval, multi-label emotion classification, unsupervised clustering και automatic text summarization. Το σύστημα δέχεται ως είσοδο ένα ελεύθερο ερώτημα χρήστη και επιστρέφει τα πλέον σχετικά tweets από το corpus SemEval-2018 Task 1 E-c (10.896 tweets, 11 κατηγορίες συναισθήματος), μαζί με ανάλυση polarity, οπτικοποίηση θεματικών ομάδων και αυτόματη δημιουργία συνόψεων. Αξιολογούνται συγκριτικά τρεις στρατηγικές retrieval (BM25, semantic search, hybrid) και τρία μοντέλα emotion classification (Logistic Regression, Linear SVM, Twitter-RoBERTa). Τα αποτελέσματα αναδεικνύουν την υπεροχή του hybrid retrieval και του pre-trained Transformer για τα αντίστοιχα tasks. Το σύστημα προσφέρεται μέσω interactive web dashboard υλοποιημένου με FastAPI και vanilla JavaScript.
 
 ---
 
 ## 1. Εισαγωγή
 
-Η εκρηκτική ανάπτυξη των κοινωνικών δικτύων έχει δημιουργήσει τεράστιες ποσότητες κειμένου με έντονη συναισθηματική φόρτιση. Η αυτόματη κατανόηση και ανάλυση αυτού του περιεχομένου αποτελεί κεντρικό ζήτημα στην επεξεργασία φυσικής γλώσσας (NLP), με εφαρμογές σε brand monitoring, ανάλυση κοινής γνώμης, έγκαιρη προειδοποίηση κρίσεων και ακαδημαϊκή έρευνα.
+Η εκρηκτική ανάπτυξη των κοινωνικών δικτύων έχει δημιουργήσει τεράστιες ποσότητες κειμένου με έντονη συναισθηματική φόρτιση. Η αυτόματη κατανόηση και ανάλυση αυτού του περιεχομένου αποτελεί κεντρικό ζήτημα στο Natural Language Processing (NLP), με εφαρμογές σε brand monitoring, ανάλυση κοινής γνώμης, έγκαιρη ανίχνευση κρίσεων και ακαδημαϊκή έρευνα.
 
-Τα tweets παρουσιάζουν ιδιαίτερες προκλήσεις σε σχέση με τυπικά κείμενα: αυστηρό όριο χαρακτήρων, συχνή χρήση hashtags, mentions, emojis, abbreviations, ορθογραφικά λάθη και ρευστή γραμματική. Παράλληλα, ένα tweet μπορεί να εκφράζει ταυτόχρονα πολλαπλά συναισθήματα (multi-label), καθιστώντας μη κατάλληλες τις κλασικές μεθόδους ταξινόμησης μιας κλάσης.
+Τα tweets παρουσιάζουν ιδιαίτερες προκλήσεις σε σχέση με τυπικά κείμενα: αυστηρό όριο χαρακτήρων, συχνή χρήση hashtags, mentions, emojis, abbreviations, ορθογραφικά λάθη και ρευστή γραμματική. Παράλληλα, ένα tweet μπορεί να εκφράζει ταυτόχρονα πολλαπλά συναισθήματα (multi-label), καθιστώντας μη κατάλληλες τις κλασικές single-label μεθόδους ταξινόμησης.
 
-Η παρούσα εργασία προτείνει μια ολοκληρωμένη αρχιτεκτονική pipeline έξι σταδίων που αντιμετωπίζει τις ανωτέρω προκλήσεις:
+Η αρχιτεκτονική βασίστηκε σε pipeline έξι σταδίων που αντιμετωπίζει τις παρακάτω προκλήσεις:
 
 1. Φόρτωση και εξερεύνηση δεδομένων (Data Ingestion)
-2. Προεπεξεργασία κειμένου (Preprocessing)
-3. Ανάκτηση πληροφορίας (Retrieval)
-4. Πολυ-ετικέτα ταξινόμηση συναισθήματος (Classification)
-5. Ομαδοποίηση και θεματική ανάλυση (Aggregation)
+2. Προεπεξεργασία κειμένου (Text Preprocessing)
+3. Ανάκτηση πληροφορίας (Information Retrieval)
+4. Multi-label emotion classification
+5. Clustering και θεματική ανάλυση (Aggregation)
 6. Δημιουργία αναφοράς και σύνοψης (Report Generation)
 
 ---
@@ -29,17 +29,17 @@
 
 ### 2.1 Ανάλυση Συναισθήματος σε Tweets
 
-Η ανάλυση συναισθήματος σε tweets αντιμετωπίστηκε αρχικά ως πρόβλημα τριών κλάσεων (θετικό / αρνητικό / ουδέτερο). Το SemEval workshop εισήγαγε ετησίως νέα benchmarks, με το Task 1 του 2018 να αποτελεί σταθμό για την multi-label emotion classification λόγω της χρήσης 11 διακριτών συναισθηματικών κατηγοριών και της υψηλής ποιότητας annotations.
+Η sentiment analysis σε tweets αντιμετωπίστηκε αρχικά ως πρόβλημα τριών κλάσεων (θετικό / αρνητικό / ουδέτερο). Το SemEval workshop εισήγαγε ετησίως νέα benchmarks, με το Task 1 του 2018 να αποτελεί σταθμό για την multi-label emotion classification λόγω της χρήσης 11 διακριτών emotion categories και της υψηλής ποιότητας annotations.
 
-### 2.2 Μοντέλα Ανάκτησης Πληροφορίας
+### 2.2 Μοντέλα Information Retrieval
 
-Το BM25 (Robertson et al., 1995) παραμένει ισχυρό baseline για keyword-based retrieval. Η ανάπτυξη των sentence embeddings (Reimers & Gurevych, 2019) και η δημιουργία αποδοτικών vector indices (Johnson et al., 2019, FAISS) επέτρεψαν τη σημασιολογική αναζήτηση σε μεγάλης κλίμακας corpora. Η υβριδική ανάκτηση, που συνδυάζει sparse και dense αναπαραστάσεις, έχει δείξει βελτιωμένη απόδοση σε σύγκριση με τις επιμέρους μεθόδους.
+Το BM25 (Robertson et al., 1995) παραμένει ισχυρό baseline για keyword-based retrieval. Η ανάπτυξη των sentence embeddings (Reimers & Gurevych, 2019) και η δημιουργία αποδοτικών vector indices (Johnson et al., 2019, FAISS) επέτρεψαν τη semantic search σε large-scale corpora. Το hybrid retrieval, που συνδυάζει sparse και dense representations, έχει δείξει βελτιωμένη απόδοση σε σύγκριση με τις επιμέρους μεθόδους.
 
 ### 2.3 Pre-trained Transformers για Ανάλυση Tweets
 
-Το BERT (Devlin et al., 2019) και οι παράγωγοί του αποτελούν πλέον το state-of-the-art για ταξινόμηση κειμένου. Ειδικά για tweets, το Twitter-RoBERTa (Barbieri et al., 2020) από το Cardiff NLP lab εκπαιδεύτηκε σε εκατομμύρια tweets και fine-tuned για emotion classification στο TweetEval benchmark.
+Το BERT (Devlin et al., 2019) και οι παράγωγοί του αποτελούν πλέον το state-of-the-art για text classification. Ειδικά για tweets, το Twitter-RoBERTa (Barbieri et al., 2020) από το Cardiff NLP lab εκπαιδεύτηκε σε εκατομμύρια tweets και fine-tuned για emotion classification στο TweetEval benchmark.
 
-### 2.4 Αυτόματη Σύνοψη
+### 2.4 Automatic Text Summarization
 
 Οι extractive μέθοδοι επιλέγουν αντιπροσωπευτικές προτάσεις από το corpus (Mihalcea & Tarau, 2004). Οι abstractive μέθοδοι παράγουν νέο κείμενο χρησιμοποιώντας seq2seq μοντέλα. Το DistilBART (Shleifer & Rush, 2020) αποτελεί compressed έκδοση του BART που διατηρεί υψηλή απόδοση με μειωμένες υπολογιστικές απαιτήσεις.
 
@@ -49,17 +49,17 @@
 
 ### 3.1 Περιγραφή
 
-Το σύστημα χρησιμοποιεί το **SemEval-2018 Task 1 Subtask E-c** (Affect in Tweets, Mohammad et al., 2018), το οποίο αποτελεί ένα από τα πιο ευρέως χρησιμοποιούμενα benchmarks για multi-label emotion classification σε αγγλικά tweets. Κάθε δείγμα αποτελείται από ένα tweet και 11 binary labels, υποδηλώνοντας την παρουσία ή απουσία κάθε συναισθήματος.
+Το σύστημα χρησιμοποιεί το **SemEval-2018 Task 1 Subtask E-c** (Affect in Tweets, Mohammad et al., 2018), ένα από τα πιο ευρέως χρησιμοποιούμενα benchmarks για multi-label emotion classification σε αγγλικά tweets. Κάθε δείγμα αποτελείται από ένα tweet και 11 binary labels, που υποδηλώνουν την παρουσία ή απουσία κάθε συναισθήματος.
 
-### 3.2 Συναισθηματικές Κατηγορίες
+### 3.2 Emotion Categories
 
-Τα 11 συναισθήματα διακρίνονται σε τρεις ομάδες πολικότητας:
+Τα 11 συναισθήματα διακρίνονται σε τρεις ομάδες polarity:
 
-| Πολικότητα | Συναισθήματα |
+| Polarity | Emotions |
 |---|---|
-| Θετικά | joy, love, optimism, anticipation, trust |
-| Αρνητικά | anger, disgust, fear, pessimism, sadness |
-| Ουδέτερο / Αμφίσημο | surprise |
+| Positive | joy, love, optimism, anticipation, trust |
+| Negative | anger, disgust, fear, pessimism, sadness |
+| Neutral / Αμφίσημο | surprise |
 
 ### 3.3 Στατιστικά Dataset
 
@@ -70,11 +70,11 @@
 | Test | 3.259 |
 | Σύνολο | 10.983 |
 
-Μετά την προεπεξεργασία και την αφαίρεση διπλότυπων: **10.896 tweets**.
+Μετά το preprocessing και την αφαίρεση duplicates: **10.896 tweets**.
 
-**Κατανομή Συναισθημάτων (συνολικό dataset):**
+**Κατανομή Emotions (συνολικό dataset):**
 
-| Συναίσθημα | Πλήθος | Ποσοστό |
+| Emotion | Πλήθος | Ποσοστό |
 |---|---|---|
 | joy | 4.319 | 39.3% |
 | disgust | 4.020 | 36.6% |
@@ -88,11 +88,11 @@
 | surprise | 566 | 5.2% |
 | trust | 553 | 5.0% |
 
-Το dataset παρουσιάζει σημαντική **ανισορροπία κλάσεων (class imbalance)**: η κατηγορία joy έχει σχεδόν 8 φορές περισσότερα παραδείγματα από την trust. Αυτό επηρεάζει άμεσα την απόδοση των classifiers και αντιμετωπίζεται με την παράμετρο `class_weight='balanced'`.
+Το dataset παρουσιάζει σημαντικό **class imbalance**: η κατηγορία joy έχει σχεδόν 8 φορές περισσότερα παραδείγματα από την trust. Αυτό επηρεάζει άμεσα την απόδοση των classifiers και αντιμετωπίζεται με την παράμετρο `class_weight='balanced'`.
 
-**Κατανομή Πλήθους Συναισθημάτων ανά Tweet:**
+**Κατανομή Πλήθους Emotions ανά Tweet:**
 
-| Αριθμός Συναισθημάτων | Tweets | Ποσοστό |
+| Αριθμός Emotions | Tweets | Ποσοστό |
 |---|---|---|
 | 0 | 293 | 2.7% |
 | 1 | 1.481 | 13.5% |
@@ -102,48 +102,48 @@
 | 5 | 170 | 1.5% |
 | 6 | 16 | 0.1% |
 
-Μέσος αριθμός συναισθημάτων ανά tweet: **2.37**, γεγονός που επιβεβαιώνει τη multi-label φύση του προβλήματος.
+Μέσος αριθμός emotions ανά tweet: **2.37**, γεγονός που επιβεβαιώνει τη multi-label φύση του προβλήματος.
 
 **Σχετικά Plots:**
 
-![Κατανομή συναισθηματικών ετικετών και multi-label distribution](data/processed/dataset_overview.png)
+![Κατανομή emotion labels και multi-label distribution](data/processed/dataset_overview.png)
 
-![Heatmap συν-εμφάνισης συναισθημάτων](data/processed/emotion_cooccurrence.png)
+![Heatmap συν-εμφάνισης emotions](data/processed/emotion_cooccurrence.png)
 
 ![Κατανομή ανά train/validation/test split](data/processed/emotion_per_split.png)
 
 ---
 
-## 4. Προεπεξεργασία Κειμένου
+## 4. Text Preprocessing
 
 ### 4.1 Φιλοσοφία Δύο Παραλλαγών
 
 Διαφορετικά υποσυστήματα απαιτούν διαφορετικό είδος κειμένου ως είσοδο. Για τον λόγο αυτό παράγονται δύο παραλλαγές για κάθε tweet:
 
 **`text_clean` — Aggressive Cleaning:**
-Χρησιμοποιείται για BM25, TF-IDF και κλασικούς ML ταξινομητές. Η αφαίρεση θορύβου (URLs, αναφορές χρηστών, σημεία στίξης, stopwords) αποτρέπει την ανεπιθύμητη επίδραση μη σημαντικών tokens στους αλγόριθμους ακριβούς αντιστοίχισης λέξεων.
+Χρησιμοποιείται για BM25, TF-IDF και classical ML classifiers. Η αφαίρεση noise (URLs, user mentions, στίξη, stopwords) αποτρέπει την ανεπιθύμητη επίδραση μη σημαντικών tokens στους αλγόριθμους ακριβούς αντιστοίχισης λέξεων.
 
 **`text_light` — Light Cleaning:**
 Χρησιμοποιείται για το SentenceTransformer (all-MiniLM-L6-v2) και το Twitter-RoBERTa. Αυτά τα μοντέλα εκπαιδεύτηκαν σε raw tweet text και αξιοποιούν τα hashtags και τα emojis ως σημασιολογική πληροφορία. Η επιθετική αφαίρεσή τους θα αποτελούσε απώλεια πληροφορίας.
 
 ### 4.2 Βήματα Επεξεργασίας `text_clean`
 
-Η pipeline εφαρμόζεται διαδοχικά:
+Το pipeline εφαρμόζεται διαδοχικά:
 
 1. **Lowercase:** Ομοιοποίηση κεφαλαίων/πεζών για case-insensitive matching.
 2. **Αφαίρεση URLs:** Regex pattern αφαιρεί `https://...` και `www....` καθώς δεν φέρουν συναισθηματικό νόημα.
-3. **Αφαίρεση Mentions:** Αφαίρεση `@username` — τα usernames δεν συνεισφέρουν στη συναισθηματική πληροφορία.
+3. **Αφαίρεση Mentions:** Αφαίρεση `@username` — τα usernames δεν συνεισφέρουν στη sentiment πληροφορία.
 4. **Emoji Demojization:** Μετατροπή emojis σε κείμενο (π.χ. `😭` → `loudly_crying_face`) αντί για αφαίρεση, διατηρώντας τη συναισθηματική πληροφορία σε μορφή κατάλληλη για TF-IDF.
 5. **Αφαίρεση `#`:** Διατήρηση της λέξης του hashtag, αφαίρεση μόνο του `#` συμβόλου.
-6. **Αφαίρεση Αριθμών:** Μεμονωμένοι αριθμοί σπάνια φέρουν συναισθηματική πληροφορία.
-7. **Αφαίρεση Σημείων Στίξης:** Μη-αλφαριθμητικοί χαρακτήρες αντικαθίστανται με κενό.
-8. **Tokenization (TweetTokenizer):** Χρησιμοποιείται ο NLTK TweetTokenizer αντί για απλό split, ώστε να αντιμετωπιστούν ορθά οι tweet-specific γλωσσικές δομές.
+6. **Αφαίρεση Αριθμών:** Μεμονωμένοι αριθμοί σπάνια φέρουν sentiment πληροφορία.
+7. **Αφαίρεση Στίξης:** Μη-αλφαριθμητικοί χαρακτήρες αντικαθίστανται με κενό.
+8. **Tokenization (TweetTokenizer):** Χρησιμοποιείται ο NLTK TweetTokenizer αντί για απλό whitespace split, ώστε να αντιμετωπιστούν ορθά οι tweet-specific γλωσσικές δομές.
 9. **Αφαίρεση Stopwords:** Αφαιρούνται συχνές λέξεις χωρίς διαφοροποιητική αξία (the, a, is...) και tokens μήκους 1.
 
 **Παράδειγμα:**
 ```
-Είσοδος:  "I LOVE #Python! Check this: https://example.com @someone #coding"
-Έξοδος:   "love python snake check coding"
+Input:  "I LOVE #Python! Check this: https://example.com @someone #coding"
+Output: "love python snake check coding"
 ```
 
 ### 4.3 Βήματα Επεξεργασίας `text_light`
@@ -151,57 +151,57 @@
 Μόνο τρία βήματα:
 1. Αντικατάσταση URLs με το token `URL`
 2. Αντικατάσταση mentions με το token `USER`
-3. Normalization κενών χαρακτήρων
+3. Normalization whitespace
 
 **Παράδειγμα:**
 ```
-Είσοδος:  "I LOVE #Python! Check this: https://example.com @someone #coding"
-Έξοδος:   "I LOVE #Python! Check this: URL USER #coding"
+Input:  "I LOVE #Python! Check this: https://example.com @someone #coding"
+Output: "I LOVE #Python! Check this: URL USER #coding"
 ```
 
-### 4.4 Αφαίρεση Διπλότυπων
+### 4.4 Deduplication
 
-Εφαρμόζεται MD5 hashing πάνω στο `text_clean` κάθε tweet. Η χρήση hash αντί για απευθείας σύγκριση strings παρέχει ταχύτητα O(1) αντί O(n). Αφαιρέθηκαν **86 διπλότυπα (0.8%)**, καταλήγοντας σε 10.896 μοναδικά tweets.
+Εφαρμόζεται MD5 hashing πάνω στο `text_clean` κάθε tweet. Η χρήση hash αντί για απευθείας σύγκριση strings παρέχει O(1) ταχύτητα αντί O(n). Αφαιρέθηκαν **86 duplicates (0.8%)**, καταλήγοντας σε 10.896 μοναδικά tweets.
 
-### 4.5 Ποιοτικός Έλεγχος
+### 4.5 Quality Checks
 
 Μετά την επεξεργασία, 1 tweet κατέληξε κενό (αποτελούνταν αποκλειστικά από URLs και stopwords) και αφαιρέθηκε.
 
-**Στατιστικά Μήκους Token (text_clean):**
+**Στατιστικά Token Length (`text_clean`):**
 
 | Στατιστικό | Τιμή |
 |---|---|
-| Μέσος Όρος | 8.86 tokens |
-| Τυπική Απόκλιση | 3.88 |
-| Ελάχιστο | 1 |
-| Διάμεσος (50%) | 9 |
-| Μέγιστο | 79 |
+| Mean | 8.86 tokens |
+| Std | 3.88 |
+| Min | 1 |
+| Median (50%) | 9 |
+| Max | 79 |
 
 **Σχετικά Plots:**
 
-![Κατανομή μήκους tokens για text_clean και text_light](data/processed/token_length_dist.png)
+![Κατανομή token length για text_clean και text_light](data/processed/token_length_dist.png)
 
 ---
 
-## 5. Στρώμα Ανάκτησης Πληροφορίας
+## 5. Information Retrieval Layer
 
 ### 5.1 Κίνητρο
 
-Στο πλαίσιο του συστήματος, η ανάκτηση αντιμετωπίζεται ως **ad-hoc information retrieval** πάνω σε ένα στατικό corpus: δοθέντος ενός ερωτήματος χρήστη (π.χ. "vaccines health pandemic"), εντοπίζονται τα top-K πιο σχετικά tweets. Αξιολογούνται τρεις στρατηγικές.
+Στο πλαίσιο του συστήματος, το retrieval αντιμετωπίζεται ως **ad-hoc information retrieval** πάνω σε ένα στατικό corpus: δοθέντος ενός query χρήστη (π.χ. "vaccines health pandemic"), εντοπίζονται τα top-K πιο σχετικά tweets. Αξιολογούνται τρεις στρατηγικές.
 
 ### 5.2 BM25 — Sparse Keyword Retrieval
 
 Ο αλγόριθμος BM25 Okapi (Robertson et al., 1995) αποτελεί βελτίωση του TF-IDF ειδικά για retrieval tasks. Λαμβάνει υπόψη:
 
 - **IDF:** Σπάνιες λέξεις έχουν υψηλότερο βάρος από συχνές.
-- **TF με Saturation:** Η συχνότητα εμφάνισης δεν αυξάνεται γραμμικά — αποφεύγεται η κυριαρχία επαναλαμβανόμενων λέξεων.
-- **Normalization Μήκους:** Μεγαλύτερα documents τιμωρούνται ελαφρά.
+- **TF Saturation:** Η term frequency δεν αυξάνεται γραμμικά — αποφεύγεται η κυριαρχία επαναλαμβανόμενων λέξεων.
+- **Length Normalization:** Μεγαλύτερα documents τιμωρούνται ελαφρά.
 
 Ο index χτίζεται πάνω στο `text_clean` corpus και αποθηκεύεται ως `data/index/bm25.pkl`.
 
-### 5.3 Σημασιολογική Αναζήτηση — Dense Retrieval
+### 5.3 Semantic Search — Dense Retrieval
 
-Χρησιμοποιείται το μοντέλο **all-MiniLM-L6-v2** (22M parameters) για την κωδικοποίηση κάθε tweet σε ένα 384-διάστατο vector. Ο αλγόριθμος:
+Χρησιμοποιείται το μοντέλο **all-MiniLM-L6-v2** (22M parameters) για την κωδικοποίηση κάθε tweet σε ένα 384-dimensional vector. Ο αλγόριθμος:
 
 1. Κωδικοποιεί όλα τα tweets **μία φορά** κατά τον χρόνο δημιουργίας index (offline).
 2. Κατά το runtime, κωδικοποιεί το query σε ένα vector.
@@ -211,65 +211,65 @@
 
 Τα pre-computed embeddings αποθηκεύονται ως `data/index/embeddings.npy` (16MB, shape: 10.896 × 384).
 
-### 5.4 Υβριδική Ανάκτηση — Fusion
+### 5.4 Hybrid Retrieval — Score Fusion
 
-Η υβριδική στρατηγική συνδυάζει BM25 και σημασιολογική αναζήτηση:
+Το hybrid retrieval συνδυάζει BM25 και semantic search:
 
 **Βήμα 1 — Min-Max Normalization:**
-Και τα δύο score vectors φέρονται στο εύρος [0, 1]. Αυτό είναι απαραίτητο διότι τα BM25 scores είναι unbounded, ενώ τα cosine similarities βρίσκονται ήδη στο [0, 1].
+Και τα δύο score vectors κανονικοποιούνται στο εύρος [0, 1]. Αυτό είναι απαραίτητο διότι τα BM25 scores είναι unbounded, ενώ τα cosine similarities βρίσκονται ήδη στο [0, 1].
 
 ```
 BM25_norm  = (score - min) / (max - min)
 Sem_norm   = (score - min) / (max - min)
 ```
 
-**Βήμα 2 — Σταθμισμένος Μέσος:**
+**Βήμα 2 — Weighted Sum:**
 ```
-hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
+hybrid_score = alpha × BM25_norm + (1 - alpha) × Semantic_norm
 ```
 
 Ο χρήστης ρυθμίζει το alpha (0 = purely semantic, 1 = purely BM25) μέσω slider στο dashboard. Default: alpha = 0.5.
 
-### 5.5 Αξιολόγηση Ανάκτησης
+### 5.5 Αξιολόγηση Retrieval
 
-Αξιολογούνται τρεις μετρικές IR σε 7 ερωτήματα για k ∈ {5, 10, 20}:
+Αξιολογούνται τρεις standard IR metrics σε 7 queries για k ∈ {5, 10, 20}:
 
 **Precision@k:** Ποσοστό πραγματικά σχετικών tweets στα top-k αποτελέσματα. Μετρά την ακρίβεια.
 
 **Recall@k:** Ποσοστό των σχετικών tweets του corpus που εντοπίστηκαν στα top-k. Μετρά την πληρότητα.
 
-**nDCG@k (Normalized Discounted Cumulative Gain):** Μετρά αν τα πιο σχετικά αποτελέσματα εμφανίζονται ψηλά στην κατάταξη. Τιμωρεί σχετικά αποτελέσματα που βρίσκονται σε χαμηλές θέσεις.
+**nDCG@k (Normalized Discounted Cumulative Gain):** Μετρά αν τα πιο σχετικά αποτελέσματα εμφανίζονται ψηλά στο ranking. Τιμωρεί σχετικά αποτελέσματα που βρίσκονται σε χαμηλές θέσεις.
 
 Ο ορισμός "σχετικού" tweet χρησιμοποιεί proxy relevance: ένα tweet θεωρείται σχετικό αν περιέχει τουλάχιστον ένα token του query στο `text_clean`.
 
 **Σχετικά Plots:**
 
-![Κατανομή συναισθημάτων στα top-50 retrieved tweets για demo query "covid"](data/index/emotion_dist_retrieved.png)
+![Κατανομή emotions στα top-50 retrieved tweets για demo query "covid"](data/index/emotion_dist_retrieved.png)
 
 ---
 
-## 6. Πολυ-ετικέτα Ταξινόμηση Συναισθήματος
+## 6. Multi-Label Emotion Classification
 
 ### 6.1 Διαμόρφωση Προβλήματος
 
-Το πρόβλημα διαμορφώνεται ως **multi-label binary classification**: για κάθε tweet και για κάθε ένα από τα 11 συναισθήματα, πρέπει να προβλεφθεί αν το συναίσθημα είναι παρόν (1) ή απόν (0). Συνολικά εκπαιδεύονται 11 binary classifiers, ένας ανά συναίσθημα.
+Το πρόβλημα διαμορφώνεται ως **multi-label binary classification**: για κάθε tweet και για κάθε ένα από τα 11 emotions, προβλέπεται αν το emotion είναι παρόν (1) ή απόν (0). Συνολικά εκπαιδεύονται 11 binary classifiers, ένας ανά emotion.
 
-Αξιολογούνται τρία πειράματα με αυστηρή αποφυγή data leakage: το TF-IDF vocabulary fit γίνεται **μόνο** στο training set, με transform στο validation και test set.
+Αξιολογούνται τρία experiments με αυστηρή αποφυγή data leakage: το TF-IDF vocabulary fit γίνεται **μόνο** στο training set, με transform στο validation και test set.
 
-### 6.2 Πείραμα 1 — Logistic Regression + TF-IDF
+### 6.2 Experiment 1 — Logistic Regression + TF-IDF
 
-**Εξαγωγή Χαρακτηριστικών:**
+**Feature Extraction:**
 Χρησιμοποιούνται δύο TF-IDF vectorizers που συνενώνονται σε ένα feature matrix:
 
-- **Word-level TF-IDF** (unigrams + bigrams, max 30.000 features): Αναπαριστά μεμονωμένες λέξεις και ζεύγη λέξεων. Οι bigrams συλλαμβάνουν φράσεις όπως "mental health" ή "bitcoin price".
-- **Char-level TF-IDF** (3-5 character n-grams, max 30.000 features): Αναπαριστά ακολουθίες χαρακτήρων, συλλαμβάνοντας sub-word patterns. Παρέχει ανθεκτικότητα σε typos και slang (π.χ. "luv" και "love" μοιράζονται n-grams).
+- **Word-level TF-IDF** (unigrams + bigrams, max 30.000 features): Αναπαριστά μεμονωμένες λέξεις και ζεύγη λέξεων. Τα bigrams συλλαμβάνουν φράσεις όπως "mental health" ή "bitcoin price".
+- **Char-level TF-IDF** (3-5 character n-grams, max 30.000 features): Αναπαριστά ακολουθίες χαρακτήρων, συλλαμβάνοντας sub-word patterns. Παρέχει ανθεκτικότητα σε typos και slang (π.χ. "luv" και "love" μοιράζονται κοινά n-grams).
 
 Τελικό feature matrix: **(6.768 × 44.826)**
 
 **Μοντέλο:**
 `OneVsRestClassifier(LogisticRegression(C=1.0, solver='lbfgs', class_weight='balanced'))`
 
-Η παράμετρος `class_weight='balanced'` αντισταθμίζει την ανισορροπία κλάσεων αυξάνοντας το βάρος των σπάνιων κατηγοριών κατά την εκπαίδευση.
+Η παράμετρος `class_weight='balanced'` αντισταθμίζει το class imbalance αυξάνοντας το βάρος των σπάνιων κατηγοριών κατά το training.
 
 **Αποτελέσματα (Test Set):**
 
@@ -280,9 +280,9 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 | Hamming Loss | 0.1702 |
 | Subset Accuracy | 0.1602 |
 
-**Ανά Συναίσθημα (F1):**
+**Ανά Emotion (F1):**
 
-| Συναίσθημα | Precision | Recall | F1 |
+| Emotion | Precision | Recall | F1 |
 |---|---|---|---|
 | joy | 0.819 | 0.805 | 0.812 |
 | anger | 0.700 | 0.718 | 0.709 |
@@ -296,7 +296,7 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 | surprise | 0.205 | 0.206 | 0.205 |
 | trust | 0.110 | 0.163 | 0.132 |
 
-### 6.3 Πείραμα 2 — Linear SVM + TF-IDF
+### 6.3 Experiment 2 — Linear SVM + TF-IDF
 
 **Μοντέλο:**
 `OneVsRestClassifier(LinearSVC(C=1.0, max_iter=2000, class_weight='balanced'))`
@@ -312,17 +312,17 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 | Hamming Loss | 0.1715 |
 | Subset Accuracy | 0.1569 |
 
-Το SVM υστερεί ελαφρά έναντι του LR, γεγονός που είναι τυπικό σε high-dimensional sparse feature spaces.
+Το SVM υστερεί ελαφρά έναντι του LR, αποτέλεσμα που είναι τυπικό σε high-dimensional sparse feature spaces.
 
-### 6.4 Πείραμα 3 — Twitter-RoBERTa (Pre-trained Transformer)
+### 6.4 Experiment 3 — Twitter-RoBERTa (Pre-trained Transformer)
 
 **Μοντέλο:** `cardiffnlp/twitter-roberta-base-emotion-multilabel-latest`
 
 Το Twitter-RoBERTa (Barbieri et al., 2020) είναι RoBERTa pre-trained σε ~58M tweets και fine-tuned για multi-label emotion classification. Έχει αρχιτεκτονική 12 Transformer layers με bidirectional self-attention (125M parameters).
 
-Χρησιμοποιείται **zero-shot inference** χωρίς περαιτέρω εκπαίδευση, καθώς το label set του μοντέλου ταυτίζεται πλήρως με τα 11 συναισθήματα του SemEval dataset.
+Χρησιμοποιείται **zero-shot inference** χωρίς περαιτέρω training, καθώς το label set του μοντέλου ταυτίζεται πλήρως με τα 11 emotions του SemEval dataset.
 
-Η inference γίνεται σε batches των 32, με sigmoid activation στα 11 outputs και threshold 0.5 για binary prediction.
+Το inference γίνεται σε batches των 32, με sigmoid activation στα 11 outputs και threshold 0.5 για binary prediction.
 
 **Αποτελέσματα (Test Set):**
 
@@ -333,9 +333,9 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 | Hamming Loss | 0.1185 |
 | Subset Accuracy | 0.2912 |
 
-**Ανά Συναίσθημα (F1):**
+**Ανά Emotion (F1):**
 
-| Συναίσθημα | Precision | Recall | F1 |
+| Emotion | Precision | Recall | F1 |
 |---|---|---|---|
 | joy | 0.871 | 0.846 | 0.859 |
 | anger | 0.789 | 0.806 | 0.797 |
@@ -351,27 +351,27 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 
 ### 6.5 Συγκριτική Αξιολόγηση
 
-| Πείραμα | Macro F1 | Micro F1 | Hamming Loss |
+| Experiment | Macro F1 | Micro F1 | Hamming Loss |
 |---|---|---|---|
 | Logistic Regression + TF-IDF | 0.5222 | 0.6273 | 0.1702 |
 | Linear SVM + TF-IDF | 0.4891 | 0.6068 | 0.1715 |
 | Twitter-RoBERTa (pre-trained) | **0.5443** | **0.7134** | **0.1185** |
 
-Το Twitter-RoBERTa παρέχει τη βέλτιστη απόδοση και στις τρεις μετρικές, υπερέχοντας κατά 2.2% στο Macro F1 και 8.6% στο Micro F1 έναντι του LR. Η βελτίωση οφείλεται στην ικανότητα του Transformer να μοντελοποιεί το context πλήρως μέσω bidirectional attention, σε αντίθεση με τις bag-of-words αναπαραστάσεις των TF-IDF μεθόδων.
+Το Twitter-RoBERTa παρέχει τη βέλτιστη απόδοση και στις τρεις metrics, υπερέχοντας κατά 2.2% στο Macro F1 και 8.6% στο Micro F1 έναντι του LR. Η βελτίωση οφείλεται στην ικανότητα του Transformer να μοντελοποιεί το context μέσω bidirectional attention, σε αντίθεση με τις bag-of-words αναπαραστάσεις των TF-IDF μεθόδων.
 
-Σε όλα τα μοντέλα παρατηρείται σημαντική υποαπόδοση στις κατηγορίες trust και surprise, αντανακλώντας την ανεπάρκεια training examples (553 και 566 αντίστοιχα).
+Σε όλα τα μοντέλα παρατηρείται σημαντική υποαπόδοση στις κατηγορίες trust και surprise, αντανακλώντας την έλλειψη training examples (553 και 566 αντίστοιχα).
 
 **Σχετικά Plots:**
 
-![Συγκριτικό bar chart F1 ανά συναίσθημα και για τα τρία μοντέλα](data/models/per_emotion_f1_comparison.png)
+![Συγκριτικό bar chart F1 ανά emotion για τα τρία μοντέλα](data/models/per_emotion_f1_comparison.png)
 
 ---
 
-## 7. Ομαδοποίηση και Θεματική Ανάλυση
+## 7. Clustering και Θεματική Ανάλυση
 
 ### 7.1 Αρχή Λειτουργίας
 
-Μετά την ανάκτηση, τα retrieved tweets ομαδοποιούνται σε micro-topics χρησιμοποιώντας τα sentence embeddings τους. Η διαδικασία είναι **πλήρως data-driven**: δεν απαιτείται προκαθορισμένη θεματική ταξινόμηση ή manual annotation.
+Μετά το retrieval, τα retrieved tweets ομαδοποιούνται σε micro-topics χρησιμοποιώντας τα sentence embeddings τους. Η διαδικασία είναι **πλήρως data-driven**: δεν απαιτείται προκαθορισμένη θεματική ταξινόμηση ή manual annotation.
 
 ### 7.2 K-Means Clustering
 
@@ -382,7 +382,7 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 Δύο μέθοδοι χρησιμοποιούνται για k ∈ {2, ..., 10}:
 
 - **Elbow Method:** Παρακολουθεί την inertia (Sum of Squared Errors). Το optimal k βρίσκεται στο "elbow" της καμπύλης.
-- **Silhouette Score:** Μετρά την ποιότητα separation. Τιμή 1 = τέλεια χωριστά clusters, 0 = overlapping, -1 = λανθασμένη ανάθεση.
+- **Silhouette Score:** Μετρά την ποιότητα separation. Τιμή 1 = τέλεια διαχωρισμένα clusters, 0 = overlapping, -1 = λανθασμένη ανάθεση.
 
 Στο demo query "education technology electronics ai", ο silhouette score επέλεξε k = 2.
 
@@ -395,11 +395,11 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 Το UMAP επιλέχθηκε έναντι του PCA διότι:
 - Τα sentence embeddings ζουν σε **non-linear manifold** στον υψηδιάστατο χώρο
 - Το PCA (γραμμικός αλγόριθμος) αδυνατεί να διατηρήσει την topological δομή
-- Το UMAP διατηρεί την **τοπική δομή** (local structure): tweets με παρόμοιο νόημα εμφανίζονται κοντά στο 2D scatter plot
+- Το UMAP διατηρεί την **local structure**: tweets με παρόμοιο νόημα εμφανίζονται κοντά στο 2D scatter plot
 
 Παράμετροι: `n_components=2, random_state=42, n_neighbors=min(15, n-1)`.
 
-### 7.4 Εξαγωγή Top Terms ανά Cluster (Aspect Labels)
+### 7.4 Top Terms ανά Cluster (Aspect Labels)
 
 Για κάθε cluster, εφαρμόζεται TF-IDF και επιστρέφονται οι 5 λέξεις με τον υψηλότερο μέσο TF-IDF score. Αυτές αποτελούν τα **aspect labels** — ανθρώπινα κατανοητές περιγραφές κάθε θεματικής ομάδας.
 
@@ -409,7 +409,7 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 
 ### 7.5 Aspect-Oriented Emotion Analysis
 
-Για κάθε cluster, υπολογίζεται ο μέσος όρος των 11 emotion labels, αποκαλύπτοντας τα κυρίαρχα συναισθήματα ανά θεματική ομάδα.
+Για κάθε cluster, υπολογίζεται ο μέσος όρος των 11 emotion labels, αποκαλύπτοντας τα κυρίαρχα emotions ανά θεματική ομάδα.
 
 **Σχετικά Plots:**
 
@@ -417,48 +417,48 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 
 ![UMAP scatter plot χρωματισμένο ανά cluster](data/aggregation/umap_clusters.png)
 
-![Μέση ένταση συναισθημάτων ανά cluster](data/aggregation/emotion_per_cluster.png)
+![Μέση ένταση emotions ανά cluster](data/aggregation/emotion_per_cluster.png)
 
-![Heatmap συναισθημάτων ανά aspect](data/aggregation/emotion_per_aspect_heatmap.png)
+![Heatmap emotions ανά aspect](data/aggregation/emotion_per_aspect_heatmap.png)
 
-![Grouped bar chart συναισθημάτων ανά aspect](data/aggregation/emotion_per_aspect_bars.png)
+![Grouped bar chart emotions ανά aspect](data/aggregation/emotion_per_aspect_bars.png)
 
 ![Σύγκριση UMAP χρωματισμένο ανά cluster vs ανά aspect](data/aggregation/umap_cluster_vs_aspect.png)
 
 ---
 
-## 8. Δημιουργία Αναφοράς και Σύνοψης
+## 8. Report Generation και Summarization
 
-### 8.1 Ανάθεση Πολικότητας
+### 8.1 Polarity Assignment
 
-Κάθε tweet λαμβάνει ετικέτα πολικότητας βάσει majority vote μεταξύ των ενεργών emotion labels:
+Κάθε tweet λαμβάνει polarity label βάσει majority vote μεταξύ των ενεργών emotion labels:
 
 ```
-Θετικά:   joy, love, optimism, anticipation, trust
-Αρνητικά: anger, disgust, fear, pessimism, sadness
-Ουδέτερο: ισοπαλία, απουσία emotions, ή μόνο surprise
+Positive: joy, love, optimism, anticipation, trust
+Negative: anger, disgust, fear, pessimism, sadness
+Neutral:  ισοπαλία, απουσία emotions, ή μόνο surprise
 ```
 
 Το surprise εντάσσεται στο neutral λόγω της αμφίσημης φύσης του — μπορεί να συνοδεύει τόσο θετικά όσο και αρνητικά γεγονότα.
 
-**Κατανομή Πολικότητας για query "education technology electronics ai" (top-500 tweets):**
+**Κατανομή Polarity για query "education technology electronics ai" (top-500 tweets):**
 
-| Πολικότητα | Πλήθος | Ποσοστό |
+| Polarity | Πλήθος | Ποσοστό |
 |---|---|---|
-| Θετική | 248 | 49.6% |
-| Αρνητική | 210 | 42.0% |
-| Ουδέτερη | 42 | 8.4% |
+| Positive | 248 | 49.6% |
+| Negative | 210 | 42.0% |
+| Neutral | 42 | 8.4% |
 
 ### 8.2 Extractive Summary — Centroid-Nearest
 
-Για κάθε ομάδα πολικότητας, η extractive σύνοψη επιλέγει τα 3 tweets που βρίσκονται πλησιέστερα στο **centroid** (μέσο embedding) της ομάδας, μετρώντας cosine similarity.
+Για κάθε polarity group, η extractive σύνοψη επιλέγει τα 3 tweets που βρίσκονται πλησιέστερα στο **centroid** (μέσο embedding) της ομάδας, μετρώντας cosine similarity.
 
 **Αλγόριθμος:**
 1. Υπολογισμός centroid: μέσος όρος των embeddings όλων των tweets της ομάδας
 2. Υπολογισμός cosine similarity κάθε tweet με το centroid
-3. Επιλογή top-3 tweets με τη μεγαλύτερη ομοιότητα
+3. Επιλογή top-3 tweets με τη μεγαλύτερη similarity
 
-Τα tweets κοντά στο centroid είναι τα πιο **αντιπροσωπευτικά** της ομάδας — εκφράζουν την "μέση άποψη" και όχι ακραίες θέσεις.
+Τα tweets κοντά στο centroid είναι τα πιο **αντιπροσωπευτικά** της ομάδας — εκφράζουν τη "μέση άποψη" και όχι ακραίες θέσεις.
 
 **Παράδειγμα Αποτελεσμάτων (Positive Group, 248 tweets):**
 
@@ -473,13 +473,13 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 Το μοντέλο **sshleifer/distilbart-cnn-12-6** (DistilBART, Shleifer & Rush, 2020) παράγει νέο κείμενο συνόψεων. Αρχιτεκτονικά αποτελείται από Encoder (12 layers, bidirectional attention) και Decoder (6 layers, autoregressive generation).
 
 **Διαδικασία:**
-1. Επιλογή top-10 tweets ανά πολικότητα (κατά hybrid retrieval score)
+1. Επιλογή top-10 tweets ανά polarity group (κατά hybrid retrieval score)
 2. Concatenation με separator " | "
 3. Προσθήκη prefix: `"Summarize the following tweets about {query}: ..."`
 4. Truncation στους 3.200 χαρακτήρες
 5. Inference με `min_length=40, max_length=120, do_sample=False`
 
-Το μοντέλο φορτώνεται **lazy** (μόνο on-demand), παραμένει στη μνήμη για επόμενες κλήσεις και χρησιμοποιεί thread-safe singleton με `threading.Lock`.
+Το μοντέλο φορτώνεται **on-demand** (lazy loading), παραμένει στη μνήμη για επόμενες κλήσεις και χρησιμοποιεί thread-safe singleton με `threading.Lock`.
 
 ### 8.4 Σύγκριση Extractive vs Abstractive
 
@@ -493,31 +493,31 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 
 **Σχετικά Plots:**
 
-![Bar chart κατανομής πολικότητας](data/report/polarity_distribution.png)
+![Bar chart κατανομής polarity](data/report/polarity_distribution.png)
 
-![Heatmap activation rate ανά πολικότητα και συναίσθημα](data/report/polarity_emotion_heatmap.png)
+![Heatmap activation rate ανά polarity και emotion](data/report/polarity_emotion_heatmap.png)
 
 ---
 
 ## 9. Πειραματικά Αποτελέσματα — Συνολική Αξιολόγηση
 
-### 9.1 Απόδοση Ανάκτησης
+### 9.1 Απόδοση Retrieval
 
-Όλες οι στρατηγικές ανάκτησης αξιολογήθηκαν με proxy relevance σε 7 ερωτήματα. Τα ερωτήματα επιλέχθηκαν ώστε να καλύπτουν διαφορετικές θεματικές (health, finance, environment, emotions, social issues).
+Όλες οι στρατηγικές retrieval αξιολογήθηκαν με proxy relevance σε 7 queries. Τα queries επιλέχθηκαν ώστε να καλύπτουν διαφορετικές θεματικές (health, finance, environment, emotions, social issues).
 
-Η υβριδική μέθοδος επιτυγχάνει υψηλότερο nDCG@k συγκριτικά με τις επιμέρους μεθόδους, επιβεβαιώνοντας ότι ο συνδυασμός keyword precision (BM25) και semantic recall (Semantic) οδηγεί σε βελτιωμένη κατάταξη.
+Το hybrid retrieval επιτυγχάνει υψηλότερο nDCG@k συγκριτικά με τις επιμέρους μεθόδους, επιβεβαιώνοντας ότι ο συνδυασμός keyword precision (BM25) και semantic recall οδηγεί σε βελτιωμένο ranking.
 
-### 9.2 Απόδοση Ταξινόμησης
+### 9.2 Απόδοση Classification
 
-Η Macro F1 αποτελεί την κύρια μετρική, σύμφωνα με τη SemEval evaluation protocol, διότι δίνει ίσο βάρος σε όλες τις κλάσεις ανεξαρτήτως frequency.
+Το Macro F1 αποτελεί την κύρια metric, σύμφωνα με το SemEval evaluation protocol, διότι δίνει ίσο βάρος σε όλες τις κλάσεις ανεξαρτήτως frequency.
 
 - **Micro F1:** Κυριαρχείται από τις πολυπληθείς κλάσεις (joy, anger, disgust) — μετρά aggregate performance.
-- **Hamming Loss:** Ποσοστό λανθασμένων predictions στο σύνολο (label, sample) pairs. Χαμηλότερο = καλύτερο.
-- **Subset Accuracy:** Ποσοστό δειγμάτων με τέλεια πρόβλεψη **όλων** των 11 labels ταυτόχρονα — πολύ αυστηρή μετρική.
+- **Hamming Loss:** Ποσοστό λανθασμένων predictions στο σύνολο των (label, sample) pairs. Χαμηλότερο = καλύτερο.
+- **Subset Accuracy:** Ποσοστό δειγμάτων με τέλεια πρόβλεψη **όλων** των 11 labels ταυτόχρονα — πολύ αυστηρή metric.
 
 ### 9.3 Clustering
 
-Στο demo query, ο silhouette-optimal αριθμός clusters ήταν k=2, με σαφή διαχωρισμό μεταξύ tweets που αφορούν εκπαιδευτικά ιδρύματα (cluster 1: "school, class, college") και tweets τεχνολογικού/γενικότερου χαρακτήρα (cluster 0: "amp, new, alarm").
+Στο demo query, ο silhouette-optimal αριθμός clusters ήταν k=2, με σαφή διαχωρισμό μεταξύ tweets που αφορούν εκπαιδευτικά ιδρύματα (cluster 1: "school, class, college") και tweets τεχνολογικού χαρακτήρα (cluster 0: "amp, new, alarm").
 
 ---
 
@@ -525,20 +525,20 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 
 ### 10.1 Κύρια Ευρήματα
 
-**Ανάκτηση:** Η υβριδική στρατηγική παρέχει σταθερά ανώτερη κάλυψη σε σχέση με τις επιμέρους μεθόδους. Το BM25 μόνο αστοχεί σε semantically related queries, ενώ το semantic μόνο μπορεί να χάσει exact matches.
+**Retrieval:** Το hybrid retrieval παρέχει σταθερά ανώτερη κάλυψη σε σχέση με τις επιμέρους μεθόδους. Το BM25 μόνο αστοχεί σε semantically related queries, ενώ το semantic search μόνο μπορεί να χάσει exact matches.
 
-**Ταξινόμηση:** Το Twitter-RoBERTa κυριαρχεί χάρη στην pre-training σε tweet corpora. Ωστόσο, η class imbalance επηρεάζει σοβαρά τα αποτελέσματα για trust και surprise — ακόμα και το RoBERTa δεν μπορεί να "μάθει" από ~550 παραδείγματα. Η **αύξηση training data** για τις σπάνιες κατηγορίες αποτελεί το πρωτεύον bottleneck.
+**Classification:** Το Twitter-RoBERTa κυριαρχεί χάρη στο pre-training σε tweet corpora. Ωστόσο, το class imbalance επηρεάζει σοβαρά τα αποτελέσματα για trust και surprise — ακόμα και το RoBERTa δεν μπορεί να "μάθει" επαρκώς από ~550 παραδείγματα. Η **αύξηση training data** για τις σπάνιες κατηγορίες αποτελεί το πρωτεύον bottleneck.
 
 **Clustering:** Το K-Means σε sentence embedding space παρέχει interpretable micro-topics μέσω TF-IDF top terms. Ωστόσο, η χρήση σταθερού k ≤ 4 στο app είναι συντηρητική επιλογή — για μεγαλύτερα datasets θα ήταν σκόπιμη δυναμική επιλογή k.
 
-**Σύνοψη:** Το DistilBART παράγει readable συνόψεις αλλά δεν εκπαιδεύτηκε σε tweets. Το domain mismatch (CNN/DailyMail news vs Twitter) οδηγεί σε occasional hallucinations ή μη πλήρως κατανοητές προτάσεις.
+**Summarization:** Το DistilBART παράγει readable συνόψεις αλλά παρουσιάζει domain mismatch (εκπαίδευση σε CNN/DailyMail news articles vs Twitter), που οδηγεί σε occasional hallucinations ή μη πλήρως συνεκτικές προτάσεις.
 
 ### 10.2 Περιορισμοί
 
 1. **Στατικό Corpus:** Το σύστημα αναζητά σε 10.896 pre-annotated tweets από το 2018 — δεν υποστηρίζει real-time data ingestion.
 2. **Ground-Truth Labels στο App:** Τα emotion labels στο live dashboard είναι τα annotations του dataset, όχι live inference. Η ενσωμάτωση του Twitter-RoBERTa για live classification θα εξαλείψει αυτόν τον περιορισμό.
 3. **Μονόγλωσσο:** Το σύστημα λειτουργεί αποκλειστικά σε αγγλικά tweets.
-4. **DistilBART Domain Mismatch:** Το μοντέλο σύνοψης εκπαιδεύτηκε σε news articles, όχι σε tweets.
+4. **DistilBART Domain Mismatch:** Το summarization μοντέλο εκπαιδεύτηκε σε news articles, όχι σε tweets.
 
 ### 10.3 Μελλοντικές Επεκτάσεις
 
@@ -552,18 +552,12 @@ hybrid_score = alpha x BM25_norm + (1 - alpha) x Semantic_norm
 
 ## 11. Συμπεράσματα
 
-Η εργασία αυτή παρουσίασε έναν ολοκληρωμένο Social Media Monitoring Agent που ενσωματώνει έξι διακριτά στάδια επεξεργασίας — από την φόρτωση raw data έως την παρουσίαση αποτελεσμάτων σε interactive dashboard. Τα κυριότερα συμπεράσματα είναι:
+1. Το **hybrid retrieval** (BM25 + Semantic) υπερέχει έναντι των επιμέρους μεθόδων, συνδυάζοντας keyword matching precision με semantic understanding.
 
-1. Η **υβριδική ανάκτηση** (BM25 + Semantic) υπερέχει έναντι των επιμέρους μεθόδων, συνδυάζοντας ακρίβεια keyword matching με semantic understanding.
+2. Το **Twitter-RoBERTa** παρέχει τη βέλτιστη emotion classification (Macro F1: 0.5443, Micro F1: 0.7134), υπερέχοντας σημαντικά των classical TF-IDF + ML προσεγγίσεων.
 
-2. Το **Twitter-RoBERTa** παρέχει τη βέλτιστη ταξινόμηση συναισθήματος (Macro F1: 0.5443, Micro F1: 0.7134), υπερέχοντας σημαντικά των κλασικών TF-IDF + ML προσεγγίσεων.
+3. Το **K-Means** σε sentence embedding space παράγει interpretable θεματικές ομάδες χωρίς labeled data, με τα TF-IDF top terms να παρέχουν ανθρώπινα κατανοητές περιγραφές.
 
-3. Ο **K-Means** σε sentence embedding space παράγει interpretable θεματικές ομάδες χωρίς ανάγκη labeled data, με τα TF-IDF top terms να παρέχουν ανθρώπινα κατανοητές περιγραφές.
+4. Ο συνδυασμός **extractive** (centroid-nearest) και **abstractive** (DistilBART) summarization παρέχει συμπληρωματική πληροφορία: η extractive προσφέρει αξιοπιστία, η abstractive αναγνωσιμότητα.
 
-4. Ο συνδυασμός **extractive** (centroid-nearest) και **abstractive** (DistilBART) σύνοψης παρέχει συμπληρωματική πληροφορία: η extractive προσφέρει αξιοπιστία, η abstractive αναγνωσιμότητα.
-
-5. Η **class imbalance** αποτελεί τον κυρίαρχο περιορισμό για τις κατηγορίες trust και surprise, ανεξαρτήτως επιλογής μοντέλου.
-
----
-
-```
+5. Το **class imbalance** αποτελεί τον κυρίαρχο περιορισμό για τις κατηγορίες trust και surprise, ανεξαρτήτως επιλογής μοντέλου.
