@@ -265,6 +265,12 @@ function renderTweets(d) {
 function renderClusters(d) {
   $('#cluster-terms').innerHTML = Object.entries(d.cluster_terms)
     .map(([cl, terms]) => `<li><b>C${cl}</b>${esc(terms)}</li>`).join('');
+  const badge = $('#best-k');
+  if (badge) {
+    badge.textContent = d.silhouette != null
+      ? `best K = ${d.best_k} · silhouette ${d.silhouette}`
+      : `K = ${d.best_k}`;
+  }
   renderUmap(d);
 }
 

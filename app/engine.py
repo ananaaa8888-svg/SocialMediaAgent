@@ -190,9 +190,17 @@ def assign_polarity(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def cluster_umap(df: pd.DataFrame, embeddings: np.ndarray) -> pd.DataFrame:
-    """K-Means (k≤4) + UMAP 2-D projection on the retrieved embeddings."""
+def cluster_umap(df: pd.DataFrame, embeddings: np.ndarray):
+    """K-Means + UMAP 2-D projection on the retrieved embeddings.
+
+    K is chosen automatically with the silhouette method (same as NB05 §4.1):
+    we try K = 2..10 and keep the K with the highest silhouette score.
+
+    Returns ``(df, meta)`` where ``meta`` carries the chosen ``best_k`` and its
+    ``silhouette`` score so they can be surfaced in the UI.
+    """
     from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
     import umap
 
     df = df.copy()
@@ -201,19 +209,26 @@ def cluster_umap(df: pd.DataFrame, embeddings: np.ndarray) -> pd.DataFrame:
         df["cluster"] = "0"
         df["umap_x"] = 0.0
         df["umap_y"] = 0.0
-        return df
+        return df, {"best_k": 1, "silhouette": None}
 
-    k = min(4, n)
-    km = KMeans(n_clusters=k, random_state=42, n_init="auto")
-    labels = km.fit_predict(embeddings)
+    # ── Best-K selection via silhouette score (NB05: Elbow + Silhouette) ──────
+    # silhouette requires 2 ≤ k ≤ n-1; cap the upper bound at 10 like the notebook
+    k_max = min(10, n - 1)
+    best_k, best_score, best_labels = 2, -1.0, None
+    for k in range(2, k_max + 1):
+        km = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = km.fit_predict(embeddings)
+        score = silhouette_score(embeddings, labels)
+        if score > best_score:
+            best_k, best_score, best_labels = k, score, labels
 
     reducer = umap.UMAP(n_components=2, random_state=42, n_neighbors=min(15, n - 1))
     coords  = reducer.fit_transform(embeddings)
 
-    df["cluster"] = labels.astype(str)
+    df["cluster"] = best_labels.astype(str)
     df["umap_x"]  = coords[:, 0]
     df["umap_y"]  = coords[:, 1]
-    return df
+    return df, {"best_k": int(best_k), "silhouette": round(float(best_score), 4)}
 
 
 def top_terms_per_cluster(df: pd.DataFrame, n: int = 5) -> dict:
@@ -301,16 +316,16 @@ def run_search(query: str, mode: str = "hybrid", alpha: float = 0.5, top_k: int 
     ret_idxs = df["ID"].map(id_to_idx).values
     ret_embs = all_embeddings[ret_idxs]
 
-    df = cluster_umap(df, ret_embs)
+    df, cluster_meta = cluster_umap(df, ret_embs)
     cluster_terms = top_terms_per_cluster(df)
 
     result_id = uuid.uuid4().hex
     _cache_put(result_id, {"df": df, "ret_embs": ret_embs, "query": query})
 
-    return _build_payload(result_id, query, df, ret_embs, cluster_terms)
+    return _build_payload(result_id, query, df, ret_embs, cluster_terms, cluster_meta)
 
 
-def _build_payload(result_id, query, df, ret_embs, cluster_terms):
+def _build_payload(result_id, query, df, ret_embs, cluster_terms, cluster_meta):
     n = len(df)
 
     # Polarity counts
@@ -394,6 +409,8 @@ def _build_payload(result_id, query, df, ret_embs, cluster_terms):
         "tweets": tweets,
         "points": points,
         "cluster_terms": {str(k): v for k, v in cluster_terms.items()},
+        "best_k": cluster_meta["best_k"],
+        "silhouette": cluster_meta["silhouette"],
         "aspects": aspects,
         "extractive": extractive,
     }
